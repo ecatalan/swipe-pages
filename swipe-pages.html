@@ -21,30 +21,11 @@ THE SOFTWARE.
 
 -->
 
-
-<!--
-
-TO FIX:
-    [X] Rebote suavizado en los extremos
-    [X] Maquetación por CSS no HTML
-    [X] Threshold cambiar algoritmo en función de una relación entre la velocidad y la posición y no de la posición
-    [X] Movimiento sin animación transition con animacion de X seg
-    [X] Si el desplazamiento se ha producido a un lado y la aceleración es en sentido contrario...
-    [X] Habilitar opción de paginado vertical
-    [X] Cambiar evento swipe Transition de lugar para que se ejecute en el momento
-    [X] Eliminar scroll con raton en scroll vertical
-    [ ] Trackend no se llama al salir de la pantalla de un dispositivo movil
-    [ ] En el scroll vertical pone un pequeño margen blanco
-
-    [X] En navegadores de escritorio hace un pequeño scroll el contenedor
-    [ ] Scroll vertical dentro de cada página no funciona en móvil por superposición de elementos
-
--->
-
 <link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="swipe-page.html">
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js" ></script>
 
-<polymer-element name="swipe-pages" attributes="selected threshold transitionDuration">
+<polymer-element name="swipe-pages" attributes="orientation selected transitionDuration outOfBoundsBounceFactorm thresholdPercent thresholdSpeed">
     <template>
         <link rel="stylesheet" href="swipe-pages.css">
         <div class="viewContent" id="viewContent">
@@ -52,207 +33,206 @@ TO FIX:
         </div>
     </template>
     <script>
-        (function(){
-            'use strict';
+        var transitionToPositionWithDurantion = function(element, position, duration, axis){
+            var isWebkit = document.body.style.webkitTransform !== undefined;
+            if (isWebkit) {
+                element.style.webkitTransition = "-webkit-transform " + duration + "s ease-out";
+                element.style.webkitTransform = "translate" + axis + "(" + position + "%)";
+            }
+            else {
+                element.style.transition = "transform " + duration + "s ease-out";
+                element.style.transform = "translate" + axis + "(" + position + "%)";
+            }
+        };
 
-            var transitionToPositionWithDurantion = function(element, position, duration, axis){
-                var isWebkit = document.body.style.webkitTransform !== undefined;
-                if (isWebkit) {
-                    element.style.webkitTransition = "-webkit-transform " + duration + "s ease-out";
-                    element.style.webkitTransform = "translate" + axis + "(" + position + "%)";
+        Polymer({
+
+            touchEvent: null,
+
+            touchEventSpeed: 0,
+
+            get touchEventIsSwipingBackwards() {
+                return (this.orientationIsVertical) ? (this.touchEvent.dy > 0) : (this.touchEvent.dx > 0);
+            },
+
+            get touchEventIsSwipingForwards() {
+                return (this.orientationIsVertical) ? (this.touchEvent.dy < 0) : (this.touchEvent.dx < 0);
+            },
+
+            get touchEventIsSwipingRightDirection() {
+                return (this.orientationIsVertical) ? ((this.touchEvent.dy * this.touchEvent.yDirection) > 0) :
+                                                      ((this.touchEvent.dx * this.touchEvent.xDirection) > 0);
+            },
+
+            get touchEventPagePercent() {
+                return (this.orientationIsVertical) ? (this.touchEvent.dy / this.pageHeight) : 
+                                                      (this.touchEvent.dx / this.pageWidth);
+            },
+
+            get selectedIsFirstPage() {
+                return (this.selected === this.firstPageIndex);
+            },
+
+            get selectedIsLastPage() {
+                return (this.selected === this.lastPageIndex);
+            },
+
+            get firstPageIndex() {
+                return 0;
+            },
+
+            get lastPageIndex() {
+                return this.pageCount - 1;
+            },
+
+            get pageCount() {
+                return this.$.items.getDistributedNodes().length;
+            },
+
+            get pageWidth() {
+                return this.getBoundingClientRect().width;
+            },
+
+            get pageHeight() {
+                return this.getBoundingClientRect().height;
+            },
+
+            get orientationIsVertical() {
+                return (this.orientation == "vertical");
+            },
+
+            get orientationAxis() {
+                return (this.orientationIsVertical) ? "Y" : "X";
+            },
+
+            publish : {
+
+                /**
+                  * Specifies the scroll orientation "horizontal" / "vertical"
+                  * @attribute orientation
+                  * @default "horizontal"
+                  * @type String
+                  */
+                orientation: "horizontal",
+
+                /**
+                  * Specifies the index of the currently selected page
+                  * @attribute selected
+                  * @default 0
+                  * @type Number
+                  */
+                selected: 0,
+
+                /**
+                  * Specifies the duration (in seconds) of the transition
+                  * from one page to another
+                  * @attribute transitionDuration
+                  * @default 0.3
+                  * @type Number
+                  */
+                transitionDuration: 0.4,
+
+                /**
+                  * Specifies the max bounce factor if try to go out
+                  * of swipe pages. 
+                  * page to another
+                  * @attribute transitionDuration
+                  * @default 0.2
+                  * @type Number
+                  */
+                outOfBoundsBounceFactor: 0.2,
+
+                /**
+                  * Specifies the threshold of screen percent the user 
+                  * must swipe in order to cause a page transition.
+                  * Only accepts values between 0 and 1.
+                  * @attribute thresholdPercent
+                  * @default 0.5
+                  * @type Number
+                  */
+                thresholdPercent: 0.5,
+
+                /**
+                  * Specifies the threshold speed the user must 
+                  * swipe with inertia in order to cause a page transition.
+                  * If the thresholdPercent is 0.5, thresholdSpeed is 100
+                  * and the user scroll 0.2 of screen the calculated 
+                  * thresholdSpeed is 40 (0.2/0.5*100). In that case the 
+                  * user must scroll at least 40 to swipe the page.
+                  * @attribute thresholdSpeed
+                  * @default 25
+                  * @type Number
+                  */
+                thresholdSpeed: 5
+            },
+
+            transitionToPage: function(pageNumber) {
+                transitionToPositionWithDurantion(this.$.viewContent,-pageNumber * 100, this.transitionDuration, this.orientationAxis);
+            },
+
+            transitionToPagePosition: function(pageNumber) {
+                if (pageNumber < this.firstPageIndex || this.lastPageIndex < pageNumber ) {
+                    pageNumber = ((pageNumber % 1) * this.outOfBoundsBounceFactor) + this.selected;                    
                 }
-                else {
-                    element.style.transition = "transform " + duration + "s ease-out";
-                    element.style.transform = "translate" + axis + "(" + position + "%)";
-                }
-            };
-
-            Polymer({
-
-                touchEvent: null,
                 
-                touchEventSpeed: 0,
+                transitionToPositionWithDurantion(this.$.viewContent,-pageNumber * 100, 0, this.orientationAxis);
+            },
 
-                get touchEventIsSwipingBackwards() {
-                    return (this.orientationIsVertical) ? (this.touchEvent.dy > 0) : (this.touchEvent.dx > 0);
-                },
-
-                get touchEventIsSwipingForwards() {
-                    return (this.orientationIsVertical) ? (this.touchEvent.dy < 0) : (this.touchEvent.dx < 0);
-                },
-
-                get touchEventIsTryingToSwipeToOutOfBounds() {
-                    return ( this.touchEventIsSwipingBackwards && this.selectedIsFirstPage ) || 
-                           ( this.touchEventIsSwipingForwards && this.selectedIsLastPage );
-                },
-
-                get touchEventIsSwipingRightDirection() {
-                    return (this.orientationIsVertical) ? ((this.touchEvent.dy * this.touchEvent.yDirection) > 0) :
-                                                          ((this.touchEvent.dx * this.touchEvent.xDirection) > 0);
-                },
-
-                get touchEventPagePercent() {
-                    return (this.orientationIsVertical) ? (this.touchEvent.dy / this.pageHeight) : (this.touchEvent.dx / this.pageWidth);
-                },
-
-                transitionToPage: function(pageNumber){
-                    transitionToPositionWithDurantion(this.$.viewContent,-pageNumber * 100, this.transitionDuration, this.orientationAxis);
-                },
-
-                transitionToPagePosition: function(pageNumber){
-                    if (pageNumber < this.firstPageIndex) pageNumber *= this.outOfBoundsBounceFactor;
-                    if (pageNumber > this.lastPageIndex) pageNumber = ((pageNumber % 1) * this.outOfBoundsBounceFactor) + this.lastPageIndex;
-                    
-                    transitionToPositionWithDurantion(this.$.viewContent,-pageNumber * 100, 0, this.orientationAxis);
-                },
-
-                get selectedIsFirstPage() {
-                    return (this.selected === this.firstPageIndex);
-                },
-
-                get selectedIsLastPage() {
-                    return (this.selected === this.lastPageIndex);
-                },
-
-                get firstPageIndex() {
-                    return 0;
-                },
-
-                get lastPageIndex() {
-                    return this.pageCount - 1;
-                },
-
-                get pageCount() {
-                    return this.$.items.getDistributedNodes().length;
-                },
-
-                get pageWidth() {
-                    return this.getBoundingClientRect().width;
-                },
-
-                get pageHeight() {
-                    return this.getBoundingClientRect().height;
-                },
-                
-                get orientationIsVertical() {
-                    return (this.orientation == "vertical");
-                },
-
-                get orientationAxis() {
-                    return (this.orientationIsVertical) ? "Y" : "X";
-                },
-
-                publish : {
-                    
-                    /**
-                      * Specifies the scroll orientation "horizontal" / "vertical"
-                      * @attribute orientation
-                      * @default "horizontal"
-                      * @type String
-                      */
-                    orientation: "horizontal",
-
-                    /**
-                      * Specifies the index of the currently selected page
-                      * @attribute selected
-                      * @default 0
-                      * @type Number
-                      */
-                    selected: 0,
-
-                    /**
-                      * Specifies the duration (in seconds) of the transition
-                      * from one page to another
-                      * @attribute transitionDuration
-                      * @default 0.3
-                      * @type Number
-                      */
-                    transitionDuration: 0.4,
-
-                    /**
-                      * Specifies the max bounce factor if try to go out
-                      * of swipe pages. 
-                      * page to another
-                      * @attribute transitionDuration
-                      * @default 0.2
-                      * @type Number
-                      */
-                    outOfBoundsBounceFactor: 0.2,
-                    
-                    /**
-                      * Specifies the threshold of screen percent the user 
-                      * must swipe in order to cause a page transition.
-                      * Only accepts values between 0 and 1.
-                      * @attribute thresholdPercent
-                      * @default 0.5
-                      * @type Number
-                      */
-                    thresholdPercent: 0.5,
-                    
-                    /**
-                      * Specifies the threshold speed the user must 
-                      * swipe with inertia in order to cause a page transition.
-                      * If the thresholdPercent is 0.5, thresholdSpeed is 100
-                      * and the user scroll 0.2 of screen the calculated 
-                      * thresholdSpeed is 40 (0.2/0.5*100). In that case the 
-                      * user must scroll at least 40 to swipe the page.
-                      * @attribute thresholdSpeed
-                      * @default 25
-                      * @type Number
-                      */
-                    thresholdSpeed: 5
-                },
-                
-                setupOrientation: function(){
-                    if (this.orientation == "vertical") {
-                        this.$.viewContent.style.setProperty ("white-space", "normal", "important");
-                        for (var i=0; i<this.$.items.getDistributedNodes().length; i++) {
-                            this.$.items.getDistributedNodes()[i].style.setProperty ("display", "block", "important");
-                        }
-                    } else {
-                        this.$.viewContent.style.setProperty ("white-space", "nowrap", "important");
-                        for (var i=0; i<this.$.items.getDistributedNodes().length; i++) {
-                            this.$.items.getDistributedNodes()[i].style.setProperty ("display", "inline-block", "important");
-                        }
+            setupOrientation: function(){
+                if (this.orientationIsVertical) {
+                    this.$.viewContent.style.setProperty ("white-space", "normal", "important");
+                    for (var i=0; i<this.$.items.getDistributedNodes().length; i++) {
+                        this.$.items.getDistributedNodes()[i].style.setProperty ("display", "block", "important");
                     }
-                },
-                
-                orientationChanged: function(oldValue, newValue) {
-                    this.setupOrientation();
-                    this.transitionToPagePosition(this.selected);
-                },
-                
-                touchEventChanged: function(oldValue, newValue) {
-                    if (!oldValue) return;
-                    this.touchEventSpeed = (this.orientation == "vertical") ? (oldValue.dy - newValue.dy) : (oldValue.dx - newValue.dx);
-                },
-
-                ready: function(){
-                    
-                    this.setupOrientation();
-
-                    PolymerGestures.addEventListener(this, "trackstart", function(event){});
-
-                    PolymerGestures.addEventListener(this, "track", function(event){
-                        this.touchEvent = event;
-                        this.transitionToPagePosition(this.selected - this.touchEventPagePercent);
-                    });
-                    
-                    PolymerGestures.addEventListener(this, "trackend", function(event){
-                        this.touchEvent = event;
-                                                
-                        var minThresholdSpeed = ( (1 - (Math.abs(this.touchEventPagePercent) / this.thresholdPercent)) * this.thresholdSpeed );
-                        var thresholdWasCrossed = ( Math.abs(this.touchEventSpeed) > minThresholdSpeed ) && this.touchEventIsSwipingRightDirection;
-                                                
-                        if (thresholdWasCrossed){
-                            if (this.touchEventIsSwipingBackwards && !this.selectedIsFirstPage) this.selected -= 1;
-                            if (this.touchEventIsSwipingForwards && !this.selectedIsLastPage) this.selected += 1;
-                        }
-
-                        this.transitionToPage(this.selected);
-                    });
+                } else {
+                    this.$.viewContent.style.setProperty ("white-space", "nowrap", "important");
+                    for (var i=0; i<this.$.items.getDistributedNodes().length; i++) {
+                        this.$.items.getDistributedNodes()[i].style.setProperty ("display", "inline-block", "important");
+                    }
                 }
-            });
-        })();
+            },
+
+            orientationChanged: function(oldValue, newValue) {
+                this.setupOrientation();
+                this.transitionToPagePosition(this.selected);
+            },
+
+            touchEventChanged: function(oldValue, newValue) {
+                if (!oldValue) return;
+                this.touchEventSpeed = (this.orientationIsVertical) ? (oldValue.dy - newValue.dy) : 
+                                                                      (oldValue.dx - newValue.dx);
+            },
+
+            selectedChanged: function(oldValue, newValue) {
+                this.transitionToPage(this.selected);
+            },
+
+            ready: function(){
+
+                this.setupOrientation();
+
+                PolymerGestures.addEventListener(this, "trackstart", function(event){});
+
+                PolymerGestures.addEventListener(this, "track", function(event){
+                    this.touchEvent = event;
+                    this.transitionToPagePosition(this.selected - this.touchEventPagePercent);
+                });
+
+                PolymerGestures.addEventListener(this, "trackend", function(event){
+                    this.touchEvent = event;
+
+                    var percentToThreshold = 1 - (Math.abs(this.touchEventPagePercent) / this.thresholdPercent);
+                    var minThresholdSpeed = ( percentToThreshold * this.thresholdSpeed );
+                    var thresholdWasCrossed = ( Math.abs(this.touchEventSpeed) > minThresholdSpeed );
+
+                    if (thresholdWasCrossed && this.touchEventIsSwipingRightDirection) {
+                        if (this.touchEventIsSwipingBackwards && !this.selectedIsFirstPage) this.selected -= 1;
+                        if (this.touchEventIsSwipingForwards && !this.selectedIsLastPage) this.selected += 1;
+                    }
+
+                    this.transitionToPage(this.selected);
+                });
+            }
+        });
     </script>
 </polymer-element>
