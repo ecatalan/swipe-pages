@@ -5,3 +5,7 @@
     white-space: normal;
     overflow: scroll;
 }
+
+:host .pageContentContainer {
+    height: 100%;
+}
